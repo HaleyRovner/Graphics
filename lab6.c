@@ -1,4 +1,4 @@
-//backface elimination of wire frame objects
+//painter's algorithm
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -15,31 +15,25 @@ double xp[15000], yp[15000], x_prime[10][15000], y_prime[10][15000];
 double half_angle = 40;
 double V[4][4], translated[4][4], rotated[4][4];
 double cs, sn, avx, avy, avz;
-int backface_sign = 1;
-int color = 1;
+double a[3], b[3];
+double color[9][3];
+typedef struct {int objectnum; int polynum; double distance;} THING;
+int n = 0;
 
-int backface_eliminate(int key, int polynum){
-	double A[3], B[3], C[3], D[3], E[3], perpendicular[3], origin[3], dot;
+THING object[150000];
 
-  A[0] = x[key][con[key][polynum][0]]; A[1] = y[key][con[key][polynum][0]]; A[2] = z[key][con[key][polynum][0]];
-  B[0] = x[key][con[key][polynum][1]]; B[1] = y[key][con[key][polynum][1]]; B[2] = z[key][con[key][polynum][1]];
-  C[0] = x[key][con[key][polynum][2]]; C[1] = y[key][con[key][polynum][2]]; C[2] = z[key][con[key][polynum][2]];
-  D[0] = B[0] - A[0]; D[1] = B[1] - A[1]; D[2] = B[2] - A[2];
-  E[0] = C[0] - A[0]; E[1] = C[1] - A[1]; E[2] = C[2] - A[2];
-
-  perpendicular[0] = D[1]*E[2] - E[1]*D[2];
-  perpendicular[1] = -(D[0]*E[2] - E[0]*D[2]);
-  perpendicular[2] = D[0]*E[1] - E[0]*D[1];
-  origin[0] = -A[0]; origin[1] = -A[1]; origin[2] = -A[2];
-
-  dot = backface_sign*(perpendicular[0]*origin[0] + perpendicular[1]*origin[1] + perpendicular[2]*origin[2]);
-  if(dot > 0){
-  	return 1;
-  } 
-  else{
-  	return 0;
-  }
-}
+void init_colors(){
+//create different colors
+	color[0][0] = 0.7; color[0][1]=0.7; color[0][2]= 1; 	
+	color[1][0] = 1; color[1][1] = 1; color[1][2] = 1;
+	color[2][0] = 0.9; color[2][1] = 0.1; color[2][2] = 0.5;
+	color[3][0] = 0; color[3][1] = 0.7; color[3][2] = 0.4;
+	color[4][0] = 0.2; color[4][1] = 0.5; color[4][2] = 0.8;
+	color[5][0] = 0.8; color[5][1] = 0.6; color[5][2] = 0.1;
+	color[6][0] = 0.9; color[6][1] = 0.9; color[6][2] = 0.9;
+	color[7][0] = 0.9; color[7][1] = 0.5; color[7][2] = 0.2;
+	color[8][0] = 0; color[8][1] = 0.8; color[8][2] = 0.5;
+} 
 
 void move_to_screen(int key){
   double H, scale_factor;
@@ -55,9 +49,8 @@ void move_to_screen(int key){
 }
 
 void draw_image(int key){
-  double h;
-  int eliminated;
 	move_to_screen(key);
+	int h;
  	for(int i = 0; i<numpolys[key]; i++){
    	poly_size = psize[key][i];
    	for(int j = 0; j<poly_size; j++){
@@ -65,36 +58,72 @@ void draw_image(int key){
      	xp[j] = display_x[key][con[key][i][j]];
      	yp[j] = display_y[key][con[key][i][j]];
    	}
-   		eliminated = backface_eliminate(key, i);
-   		if(eliminated != 0){
-   			if(color < 3){
-          G_rgb(0.9, 0.1, 0.5);
-        }
-        else if(color >= 3 && color < 5){
-          G_rgb(0.9, 0.5, 0.2);
-        }
-        else if(color >= 5 && color < 7){
-          G_rgb(0.8, 0.6, 0.1);
-        }
-        else if(color >= 7 && color < 9){
-          G_rgb(0, 0.7, 0.4);
-        }
-        else if(color >= 9 && color < 11){
-          G_rgb(0.2,0.5,0.8);
-        }
-        else if(color >= 11){
-          G_rgb(0.7, 0.7, 1);
-        }
-
-   			G_polygon(xp,yp,poly_size);
-   		}
+   	G_rgb(color[key][0], color[key][1], color[key][2]);
+   	G_polygon(xp,yp,poly_size);
  	}
+}
+
+
+void init_array(){
+	//assign 
+	for(int i = 0; i<numobjects; i++){
+		for(int j = 0; j<numpolys[i]; j++){
+			object[n].objectnum = i;
+			object[n].polynum = j;
+			object[n].distance = z[i][con[i][j][0]];
+			n++;
+		}
+	}
+}
+void print_array(){
+	int ii;
+	for(ii = 0; ii<n; ii++){
+		printf("%d %d %lf\n", object[ii].objectnum, object[ii].polynum, object[ii].distance);
+	}
+	printf("\n");
+}
+
+int compare(const void *p, const void *q){
+	THING *a, *b;
+
+	a = (THING*)p;
+	b = (THING*)q;
+
+	if(((*a).distance) < ((*b).distance)) return 1;
+	else if(((*a).distance) > ((*b).distance)) return -1;
+	else return 0;
+}
+
+void draw_object(){
+	qsort(object, n, sizeof(THING), compare);
+	int h;
+	for(int i = 0; i < n; i++){
+		double tempx[10000], tempy[10000];
+		for(int j = 0; j < psize[object[i].objectnum][object[i].polynum]; j++){
+			h = con[object[i].objectnum][object[i].polynum][j];
+			y_prime[onum][j] = (y[onum][j])/(z[onum][j]);
+			x_prime[onum][j] = (x[onum][j])/(z[onum][j]);
+
+			display_y[onum][j] = (y_prime[onum][j]*scale_factor)+300;
+			display_x[onum][j] = (x_prime[onum][i]*scale_factor)+300;
+			
+			tempx[j] = display_x[object[i].objectnum][h];
+			tempy[j] = display_y[object[i].objectnum][h];
+		}
+		double red = color[object[i].objectnum][0]; double green = color[object[i].objectnum][1]; double blue = color[object[i].objectnum][2];
+		G_rgb(red, green, blue);
+		G_fill_polygon(tempx, tempy, psize[object[i].objectnum][object[i].polynum]);
+		//G_rgb(0,0,0);
+		//G_polygon(tempx, tempy, psize[object[i].objectnum][object[i].polynum]);
+	}
+
 }
 
 int main(int argc, char **argv){
  	FILE *fp;
  	int key = 0;
-  numobjects = argc-1;
+    numobjects = argc-1;
+    init_colors();
 
  	G_init_graphics(600,600);
  	G_rgb(0,0,0);
@@ -103,23 +132,24 @@ int main(int argc, char **argv){
  	for(key = 0; key<numobjects; key++){
    		fp = fopen(argv[key+1], "r");
    		if(fp == NULL){
-        printf("Broken File\n");
-     	  exit(0);
-   	  }
-   	fscanf(fp, "%d", &numpoints[key]);
-   	for(int i = 0; i<numpoints[key]; i++){
-     	fscanf(fp, "%lf %lf %lf", &x[key][i], &y[key][i], &z[key][i]);
-   	}
-   	fscanf(fp, "%d", &numpolys[key]);
-   	for(int j = 0; j<numpolys[key]; j++){
-     	fscanf(fp, "%d", &psize[key][j]);
-     	for(int k = 0; k<psize[key][j]; k++){
+        	printf("Broken File\n");
+     	  	exit(0);
+   	  	}
+   		fscanf(fp, "%d", &numpoints[key]);
+   		for(int i = 0; i<numpoints[key]; i++){
+     		fscanf(fp, "%lf %lf %lf", &x[key][i], &y[key][i], &z[key][i]);
+   		}
+   		fscanf(fp, "%d", &numpolys[key]);
+   		for(int j = 0; j<numpolys[key]; j++){
+     		fscanf(fp, "%d", &psize[key][j]);
+     		for(int k = 0; k<psize[key][j]; k++){
 			   fscanf(fp, "%d", &con[key][j][k]);
-     	}
-   	}
-
-   	move_to_screen(key);
-   	draw_image(key);
+     		}
+   		}
+		init_array();
+		print_array();
+   		draw_object();
+   		print_array();
  	}
 
  	q = '0';
@@ -127,6 +157,7 @@ int main(int argc, char **argv){
  	sign = 1;
  	action = 't';
  	key = 0;
+
  	while(1==1){
    		M3d_make_identity(V); M3d_make_identity(translated), M3d_make_identity(rotated);
    		q = G_wait_key();
@@ -134,10 +165,7 @@ int main(int argc, char **argv){
      		exit(0);}
    		else if(q == 'c'){
     		sign = -sign;
-        }
-        else if(q == 'b'){
-        	backface_sign = -backface_sign;
-        }
+      }
    		else if(q == 't'){
      		action = q;}
    		else if(q == 'r'){
@@ -165,6 +193,7 @@ int main(int argc, char **argv){
    		else if((q == 'z') && (action == 't')){
      		if(sign > 0){
           M3d_make_translation(V, 0., 0., 0.2);
+
         }
         else{
           M3d_make_translation(V, 0., 0., -0.2);
@@ -185,24 +214,14 @@ int main(int argc, char **argv){
           sn = sin(M_PI/180);
           M3d_make_x_rotation_cs(rotated, cs, sn);
           M3d_mat_mult_points(x[key], y[key], z[key], rotated, x[key], y[key], z[key], numpoints[key]+1);
-          if(color < 13){
-            color ++;
-          }
-          else{
-            color = 1;
-          }
+
         }
         else{
           cs = cos(-M_PI/180);
           sn = sin(-M_PI/180);
           M3d_make_x_rotation_cs(rotated, cs, sn);
           M3d_mat_mult_points(x[key], y[key], z[key], rotated, x[key], y[key], z[key], numpoints[key]+1);
-          if(color < 13){
-            color ++;
-          }
-          else{
-            color = 1;
-          }
+
        	}
         M3d_make_translation(V, 0, avy, avz);
 
@@ -222,24 +241,12 @@ int main(int argc, char **argv){
           sn = sin(M_PI/180);
           M3d_make_y_rotation_cs(rotated, cs, sn);
           M3d_mat_mult_points(x[key], y[key], z[key], rotated, x[key], y[key], z[key], numpoints[key]+1);
-          if(color < 13){
-            color ++;
-          }
-          else{
-            color = 1;
-          }
         }
         else{
           cs = cos(-M_PI/180);
           sn = sin(-M_PI/180);
           M3d_make_y_rotation_cs(rotated, cs, sn);
           M3d_mat_mult_points(x[key], y[key], z[key], rotated, x[key], y[key], z[key], numpoints[key]+1);
-          if(color < 13){
-            color ++;
-          }
-          else{
-            color = 1;
-          }
         }
         M3d_make_translation(V, avx, 0, avz);
    		}
@@ -258,24 +265,12 @@ int main(int argc, char **argv){
           sn = sin(M_PI/180);
           M3d_make_z_rotation_cs(rotated, cs, sn);
           M3d_mat_mult_points(x[key], y[key], z[key], rotated, x[key], y[key], z[key], numpoints[key]+1);
-          if(color < 13){
-            color ++;
-          }
-          else{
-            color = 1;
-          }
         }
         else{
           cs = cos(-M_PI/180);
           sn = sin(-M_PI/180);
           M3d_make_z_rotation_cs(rotated, cs, sn);
           M3d_mat_mult_points(x[key], y[key], z[key], rotated, x[key], y[key], z[key], numpoints[key]+1);
-          if(color < 13){
-            color ++;
-          }
-          else{
-            color = 1;
-          }
         }
         M3d_make_translation(V, avx, avy, 0);
    		}
@@ -285,6 +280,7 @@ int main(int argc, char **argv){
    		M3d_mat_mult_points(x[key], y[key], z[key], V, x[key], y[key], z[key], numpoints[key]+1);
    		G_rgb(0,0,0);
    		G_clear();
-   		draw_image(key);
+   		draw_object();
+   		
  	}
 }

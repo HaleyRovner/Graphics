@@ -1,3 +1,4 @@
+//drawing and rotating a 3D wire frame object with no backface elimination
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -16,6 +17,21 @@ double V[4][4], translated[4][4], rotated[4][4];
 double cs, sn, avx, avy, avz;
 double a[3], b[3];
 
+void backface_eliminate(int key){
+  for(int i = 0; i < numpoints[key]; i++){
+    a[0] += x[key][i];
+    a[1] += y[key][i];
+    a[2] += z[key][i];
+  }
+  a[0] = a[0]/numpoints[key];
+  a[1] = a[1]/numpoints[key];
+  a[2] = a[2]/numpoints[key];
+
+  G_rgb(1, 0, 0);
+
+  G_line(a[0], a[0], a[1], (a[1]+1));
+}
+
 void move_to_screen(int key){
   double H, scale_factor;
  	H = tan(half_angle);
@@ -32,6 +48,7 @@ void move_to_screen(int key){
 void draw_image(int key){
   double h;
 	move_to_screen(key);
+  backface_eliminate(key);
  	for(int i = 0; i<numpolys[key]; i++){
    	poly_size = psize[key][i];
    	for(int j = 0; j<poly_size; j++){
